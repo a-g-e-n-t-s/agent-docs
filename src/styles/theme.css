@@ -1,0 +1,125 @@
+/* ═══════════════════════════════════════════
+   AGENTS Docs — Starlight Theme
+   Adapted from agent-quest's Vercel-dark design system
+   ═══════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ═══════════════════════════════════════════
+   Starlight CSS Custom Properties Override
+   ═══════════════════════════════════════════ */
+
+:root {
+  --sl-font: 'Sora', ui-sans-serif, system-ui, sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Accent — agent-quest blue */
+  --sl-color-accent-low: rgba(0, 112, 243, 0.15);
+  --sl-color-accent: #0070f3;
+  --sl-color-accent-high: #3d9aff;
+}
+
+/* ═══════════════════════════════════════════
+   Dark mode overrides (Starlight uses [data-theme])
+   ═══════════════════════════════════════════ */
+
+:root,
+[data-theme='light'],
+[data-theme='dark'] {
+  --sl-color-bg: #000000;
+  --sl-color-bg-nav: rgba(0, 0, 0, 0.85);
+  --sl-color-bg-sidebar: #0a0a0a;
+  --sl-color-bg-inline-code: #0a0a0a;
+
+  --sl-color-hairline: #1a1a1a;
+  --sl-color-hairline-light: #111111;
+  --sl-color-hairline-shade: #333333;
+
+  --sl-color-white: #ededed;
+  --sl-color-gray-1: #ededed;
+  --sl-color-gray-2: #c0c0c0;
+  --sl-color-gray-3: #888888;
+  --sl-color-gray-4: #555555;
+  --sl-color-gray-5: #333333;
+  --sl-color-gray-6: #1a1a1a;
+  --sl-color-gray-7: #111111;
+  --sl-color-black: #000000;
+
+  --sl-color-text: #ededed;
+  --sl-color-text-accent: #0070f3;
+}
+
+/* ═══════════════════════════════════════════
+   Base
+   ═══════════════════════════════════════════ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ═══════════════════════════════════════════
+   Navigation — Frosted glass
+   ═══════════════════════════════════════════ */
+
+header.header,
+.header {
+  backdrop-filter: blur(12px) saturate(180%);
+}
+
+/* ═══════════════════════════════════════════
+   Code blocks
+   ═══════════════════════════════════════════ */
+
+code:not(pre code) {
+  font-family: var(--sl-font-mono);
+  font-size: 0.85em;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  color: #ededed;
+}
+
+/* ═══════════════════════════════════════════
+   Tables
+   ═══════════════════════════════════════════ */
+
+th {
+  background: #0a0a0a;
+}
+
+/* ═══════════════════════════════════════════
+   Scrollbar
+   ═══════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555555;
+}
+
+/* ═══════════════════════════════════════════
+   Selection
+   ═══════════════════════════════════════════ */
+
+::selection {
+  background: rgba(0, 112, 243, 0.3);
+  color: #ededed;
+}

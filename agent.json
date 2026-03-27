@@ -1,0 +1,20 @@
+{
+  "name": "agent-docs",
+  "version": "1.0.0",
+  "description": "Documentation engine and KADI agent for the AGENTS ecosystem",
+  "type": "agent",
+  "entrypoint": "dist/agent.js",
+  "abilities": {
+    "secret-ability": "^0.9.3"
+  },
+  "brokers": {
+    "local": "ws://localhost:8080/kadi"
+  },
+  "networks": ["global"],
+  "scripts": {
+    "setup": "npm install",
+    "start": "npx tsx src/agent.ts broker",
+    "sync": "npx tsx src/cli/sync.ts",
+    "build": "npx tsx src/cli/build.ts"
+  }
+}
