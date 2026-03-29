@@ -5,10 +5,11 @@
   "type": "agent",
   "entrypoint": "dist/agent.js",
   "abilities": {
-    "secret-ability": "^0.9.3"
+    "secret-ability": "^0.9.4"
   },
   "brokers": {
-    "local": "ws://localhost:8080/kadi"
+    "local": "ws://localhost:8080/kadi",
+    "remote": "wss://broker.dadavidtseng.info/kadi"
   },
   "networks": ["global"],
   "scripts": {
