@@ -1,8 +1,8 @@
 {
   "name": "agent-docs",
+  "type": "agent",
   "version": "1.0.0",
   "description": "Documentation engine and KADI agent for the AGENTS ecosystem",
-  "type": "agent",
   "entrypoint": "dist/agent.js",
   "abilities": {
     "secret-ability": "^0.9.4"
