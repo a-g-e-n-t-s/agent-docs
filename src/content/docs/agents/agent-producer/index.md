@@ -55,7 +55,7 @@ Primary configuration files and fields:
     - url = "ws://localhost:8080/kadi" — primary broker URL used by the agent
     - networks = ["producer","quest","text","vision","file","global"] — default networks to join
   - [broker.remote]
-    - url = "wss://broker.dadavidtseng.info/kadi" — optional additional/remote broker
+    - url = "wss://broker.dadavidtseng.com/kadi" — optional additional/remote broker
     - networks = ["global"]
   - [bot]
     - tool_timeout_ms = 10000 — default per-tool timeout in milliseconds

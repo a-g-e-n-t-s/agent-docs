@@ -1,6 +1,6 @@
 {
   "name": "agent-docs",
-  "version": "1.0.0",
+  "version": "0.1.3",
   "type": "module",
   "description": "Documentation engine and KADI agent for the AGENTS ecosystem",
   "main": "dist/agent.js",

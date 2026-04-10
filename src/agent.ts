@@ -37,11 +37,11 @@ async function main() {
 
     const getSecret = async (key: string): Promise<string | null> => {
       try {
-        const result = await secrets!.invoke('get', { vault: 'models', key }) as { value?: string };
+        const result = await secrets!.invoke('get', { vault: 'model-manager', key }) as { value?: string };
         return result?.value ?? null;
       } catch {
         try {
-          const result = await secrets!.invoke('get', { vault: 'global', key }) as { value?: string };
+          const result = await secrets!.invoke('get', { vault: 'anthropic', key }) as { value?: string };
           return result?.value ?? null;
         } catch {
           return null;

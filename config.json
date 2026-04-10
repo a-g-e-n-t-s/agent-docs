@@ -220,21 +220,21 @@
   },
   "agent": {
     "name": "agent-docs",
-    "version": "1.0.0",
+    "version": "0.1.2",
     "description": "Documentation engine for the AGENTS ecosystem",
-    "defaultBroker": "local",
+    "defaultBroker": "remote",
     "brokers": {
-      "local": "ws://localhost:8080/kadi"
+      "remote": "wss://broker.dadavidtseng.com/kadi"
     },
     "networks": ["global"],
     "abilities": {
-      "secret-ability": "^0.9.3",
+      "secret-ability": "*",
       "ability-docs-memory": "^0.0.1"
     },
     "secrets": {
-      "vault": "models",
-      "required": ["MEMORY_API_KEY"],
-      "optional": ["MEMORY_API_URL"]
+      "vault": "model-manager",
+      "required": ["MODEL_MANAGER_API_KEY", "MODEL_MANAGER_BASE_URL"],
+      "optional": []
     }
   }
 }

@@ -1,21 +1,84 @@
 {
   "name": "agent-docs",
   "type": "agent",
-  "version": "1.0.0",
+  "version": "0.1.3",
   "description": "Documentation engine and KADI agent for the AGENTS ecosystem",
   "entrypoint": "dist/agent.js",
   "abilities": {
-    "secret-ability": "^0.9.4"
+    "secret-ability": "*"
   },
   "brokers": {
-    "local": "ws://localhost:8080/kadi",
-    "remote": "wss://broker.dadavidtseng.info/kadi"
+    "remote": "wss://broker.dadavidtseng.com/kadi"
   },
   "networks": ["global"],
   "scripts": {
     "setup": "npm install",
     "start": "npx tsx src/agent.ts broker",
-    "sync": "npx tsx src/cli/sync.ts",
-    "build": "npx tsx src/cli/build.ts"
+    "sync": "npx tsx scripts/sync-cli.ts",
+    "build": "npm run sync && astro build",
+    "build:ts": "npx tsc",
+    "dev": "astro dev --port 3333",
+    "dev:agent": "npx tsx src/agent.ts broker",
+    "serve": "astro preview --port 3333",
+    "clean": "rm -rf dist .astro node_modules abilities agent-lock.json package-lock.json"
+  },
+  "build": {
+    "default": {
+      "from": "node:20-alpine",
+      "cli": "latest",
+      "run": [
+        "npm ci --include=dev",
+        "kadi install kadi-secret",
+        "kadi install",
+        "npm prune --omit=dev --omit=optional",
+        "npm install tsx"
+      ],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  },
+  "deploy": {
+    "akash-mainnet": {
+      "target": "akash",
+      "network": "mainnet",
+      "deposit": "10",
+      "blacklist": [
+        "akash1sevd2ymtty3dpq9ycxgkhuzzk4fe6mchqdwd4e",
+        "akash14w36hwrtuqqa3j92fa8ctcxlhjgvr3a0zpp7cj"
+      ],
+      "engine": "podman",
+      "services": {
+        "app": {
+          "image": "agent-docs:0.1.3",
+          "command": ["sh", "-c", "ulimit -n 65536 2>/dev/null; kadi secret receive --vault model-manager && kadi run start"],
+          "expose": [
+            {
+              "port": 3000,
+              "as": 3000,
+              "to": [{ "global": true }]
+            }
+          ],
+          "env": [
+            "NODE_ENV=production"
+          ],
+          "resources": {
+            "cpu": 0.5,
+            "memory": "512Mi",
+            "ephemeralStorage": "1Gi"
+          },
+          "pricing": { "amount": "500", "denom": "uact" }
+        }
+      },
+      "secrets": {
+        "vaults": [
+          {
+            "vault": "model-manager",
+            "required": ["MODEL_MANAGER_API_KEY", "MODEL_MANAGER_BASE_URL"]
+          }
+        ],
+        "delivery": "broker"
+      }
+    }
   }
 }
