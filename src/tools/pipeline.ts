@@ -59,8 +59,9 @@ export function registerPipelineTool(
           const repoPath = path.resolve(PROJECT_ROOT, repo.path);
           if (!fs.existsSync(repoPath)) continue;
 
-          // Collect markdown files
-          const mdFiles = collectMarkdownFiles(repoPath, repo.crawl);
+          // Use indexCrawl for graph indexing if defined, otherwise fall back to crawl
+          const crawlPatterns = (repo as any).indexCrawl ?? repo.crawl;
+          const mdFiles = collectMarkdownFiles(repoPath, crawlPatterns);
           for (const file of mdFiles) {
             const content = fs.readFileSync(file, 'utf-8');
             const relativePath = path.relative(repoPath, file);
