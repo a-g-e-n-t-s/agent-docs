@@ -94,12 +94,6 @@
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
-    "ability-secret": {
-      "path": "../ability-secret",
-      "description": "Vault-based secret management",
-      "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
-    },
     "ability-eval": {
       "path": "../ability-eval",
       "description": "Code evaluation ability",
@@ -141,12 +135,6 @@
       "description": "Backup and restore ability",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
-    },
-    "ability-deploy": {
-      "path": "../ability-deploy",
-      "description": "Deployment ability — Akash, local, DigitalOcean targets",
-      "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
     },
     "ability-tunnel": {
       "path": "../ability-tunnel",
