@@ -23,7 +23,7 @@ const CACHE_DIR = path.resolve(import.meta.dirname, '..', '.cache', 'docs-gen');
 const DOCS_DIR = path.resolve(import.meta.dirname, '..', 'src', 'content', 'docs');
 const MAX_SOURCE_CHARS = 20_000;
 const MODEL = 'gpt-5-mini';
-const CONCURRENCY = 5;
+const CONCURRENCY = 10;
 
 interface RepoConfig {
   path: string;

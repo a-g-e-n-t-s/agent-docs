@@ -25,7 +25,7 @@ const CACHE_DIR = path.join(PROJECT_ROOT, '.cache', 'readme-gen');
 
 const MODEL = 'gpt-5-mini';
 const MAX_SOURCE_CHARS = 12000;
-const CONCURRENCY = 5;
+const CONCURRENCY = 10;
 
 interface RepoConfig {
   path: string;

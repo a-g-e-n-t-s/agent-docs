@@ -116,6 +116,20 @@ th {
 }
 
 /* ═══════════════════════════════════════════
+   Tabs — fix selected tab visibility
+   ═══════════════════════════════════════════ */
+
+[role="tablist"] [role="tab"][aria-selected="true"] {
+  color: #ededed;
+  border-color: var(--sl-color-accent);
+  background: rgba(0, 112, 243, 0.1);
+}
+
+[role="tablist"] [role="tab"] {
+  color: #888888;
+}
+
+/* ═══════════════════════════════════════════
    Selection
    ═══════════════════════════════════════════ */
 
