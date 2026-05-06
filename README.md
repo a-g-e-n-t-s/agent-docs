@@ -54,10 +54,12 @@ npm run build          # sync + astro build
 | **Version** | 0.1.3 |
 | **Type** | agent |
 | **Entrypoint** | dist/agent.js |
-| **Entrypoint (dev)** | src/agent.ts (used by npm scripts: start, dev:agent) |
+| **Description** | Documentation engine and KADI agent for the AGENTS ecosystem |
 | **Abilities** | secret-ability, ability-log |
 | **Brokers** | remote: wss://broker.dadavidtseng.com/kadi |
 | **Networks** | ["global"] |
+
+Note: The runtime/dev entrypoint is src/agent.ts (used by scripts such as start and dev:agent which invoke `npx tsx src/agent.ts broker`).
 
 Scripts of note (defined in agent.json):
 - setup: npm install
@@ -165,3 +167,5 @@ npx tsx src/agent.ts
 ```
 
 This README preserves the previously handwritten structure and updates the configuration, tooling, and development instructions to match the current repository sources.
+
+---
