@@ -201,20 +201,6 @@ for (const [name, repo] of Object.entries(repos)) {
 }
 console.log(`[sync] Step 0 done — ${readmesGenerated} READMEs generated`);
 
-// ── Step 0.5: Generate enriched documentation pages via LLM ──
-if (process.env.SKIP_LLM_DOCS !== 'true') {
-  try {
-    const { generateDocs } = await import('./generate-docs.js');
-    console.log('[sync] Step 0.5: Generating enriched docs via LLM...');
-    const generated = await generateDocs();
-    console.log(`[sync] Step 0.5 done — ${generated} pages generated`);
-  } catch (err: any) {
-    console.warn(`[sync] Step 0.5 skipped — ${err.message}`);
-  }
-} else {
-  console.log('[sync] Step 0.5: Skipped (SKIP_LLM_DOCS=true)');
-}
-
 // ── Step 1: Sync docs ──
 console.log('[sync] Step 1: Syncing documentation...');
 let totalFiles = 0;
@@ -301,3 +287,18 @@ for (const [name, repo] of Object.entries(repos)) {
 }
 
 console.log(`[sync] Done — ${readmesGenerated} READMEs generated, ${totalFiles} files synced to docs/`);
+
+// ── Step 2: Generate enriched documentation pages via LLM ──
+// Runs AFTER sync so LLM-generated pages overwrite raw README copies
+if (process.env.SKIP_LLM_DOCS !== 'true') {
+  try {
+    const { generateDocs } = await import('./generate-docs.js');
+    console.log('[sync] Step 2: Generating enriched docs via LLM...');
+    const generated = await generateDocs();
+    console.log(`[sync] Step 2 done — ${generated} pages generated`);
+  } catch (err: any) {
+    console.warn(`[sync] Step 2 skipped — ${err.message}`);
+  }
+} else {
+  console.log('[sync] Step 2: Skipped (SKIP_LLM_DOCS=true)');
+}
