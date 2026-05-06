@@ -1,23 +1,31 @@
 /**
  * LLM-enhanced README generation — reads source code and uses
- * model-manager chat-completion to generate rich documentation.
+ * model-manager to generate or update README.md files.
  *
- * Flow:
- *   1. Read agent.json + source files (tool registrations, index.ts)
- *   2. Call model-manager chat-completion with source context
- *   3. Generate/update README.md with rich content
+ * Behavior:
+ *   - Detects which repos have source changes (content hash)
+ *   - For changed repos: LLM sees existing README + new source → updates only what's outdated
+ *   - Concurrent processing (5 parallel LLM calls)
+ *   - Preserves hand-written content that's still accurate
+ *
+ * Usage:
+ *   npx tsx scripts/readme-gen-llm.ts              # all changed repos
+ *   npx tsx scripts/readme-gen-llm.ts --force      # regenerate all
+ *   npx tsx scripts/readme-gen-llm.ts --repos ability-graph,ability-memory
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
+import * as crypto from 'crypto';
 import { execSync } from 'child_process';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(__dirname, '..');
+const PROJECT_ROOT = path.resolve(import.meta.dirname, '..');
 const CONFIG_PATH = path.join(PROJECT_ROOT, 'config.json');
+const CACHE_DIR = path.join(PROJECT_ROOT, '.cache', 'readme-gen');
 
-// ── Config ──
+const MODEL = 'gpt-5-mini';
+const MAX_SOURCE_CHARS = 12000;
+const CONCURRENCY = 5;
 
 interface RepoConfig {
   path: string;
@@ -26,24 +34,14 @@ interface RepoConfig {
   description?: string;
 }
 
-const MODEL = 'gpt-5-mini';
-const MAX_SOURCE_CHARS = 12000; // Max source context per repo
-
-// ── Secrets (walk-up discovery) ──
-
-function findSecretsToml(startDir: string): string | null {
-  let dir = startDir;
-  while (true) {
-    const candidate = path.join(dir, 'secrets.toml');
-    if (fs.existsSync(candidate)) return candidate;
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
+interface ModelManagerConfig {
+  baseUrl: string;
+  apiKey: string;
 }
 
-function getModelManagerConfig(): { baseUrl: string; apiKey: string } | null {
-  // Try env vars first
+// ── Credentials ───────────────────────────────────────────────────────
+
+function getModelManagerConfig(): ModelManagerConfig | null {
   if (process.env.MODEL_MANAGER_BASE_URL && process.env.MODEL_MANAGER_API_KEY) {
     return {
       baseUrl: process.env.MODEL_MANAGER_BASE_URL,
@@ -51,82 +49,62 @@ function getModelManagerConfig(): { baseUrl: string; apiKey: string } | null {
     };
   }
 
-  // Try kadi secret get
   try {
     const baseUrl = execSync('kadi secret get MODEL_MANAGER_BASE_URL', { encoding: 'utf-8', timeout: 5000 }).trim();
     const apiKey = execSync('kadi secret get MODEL_MANAGER_API_KEY', { encoding: 'utf-8', timeout: 5000 }).trim();
     if (baseUrl && apiKey) return { baseUrl, apiKey };
-  } catch { /* fallback */ }
+  } catch { /* not available */ }
 
   return null;
 }
 
-// ── Source Code Extraction ──
-
-function extractToolRegistrations(srcDir: string): string {
-  const toolFiles: string[] = [];
-  const toolsDir = path.join(srcDir, 'tools');
-
-  if (fs.existsSync(toolsDir)) {
-    for (const file of fs.readdirSync(toolsDir)) {
-      if (file.endsWith('.ts') && file !== 'index.ts') {
-        const content = fs.readFileSync(path.join(toolsDir, file), 'utf-8');
-        // Extract tool name and description from registerTool calls
-        const matches = content.matchAll(/name:\s*['"`]([^'"`]+)['"`][\s\S]*?description:\s*['"`]([^'"`]+)['"`]/g);
-        for (const match of matches) {
-          toolFiles.push(`- ${match[1]}: ${match[2]}`);
-        }
-      }
-    }
-  }
-
-  return toolFiles.length > 0 ? toolFiles.join('\n') : '';
-}
+// ── Source Context ────────────────────────────────────────────────────
 
 function extractSourceContext(repoPath: string): string {
   const parts: string[] = [];
 
-  // agent.json
   const agentJsonPath = path.join(repoPath, 'agent.json');
   if (fs.existsSync(agentJsonPath)) {
     parts.push('=== agent.json ===');
     parts.push(fs.readFileSync(agentJsonPath, 'utf-8'));
   }
 
-  // config.toml
   const configTomlPath = path.join(repoPath, 'config.toml');
   if (fs.existsSync(configTomlPath)) {
     parts.push('=== config.toml ===');
     parts.push(fs.readFileSync(configTomlPath, 'utf-8'));
   }
 
-  // Tool registrations
   const srcDir = path.join(repoPath, 'src');
   if (fs.existsSync(srcDir)) {
-    const tools = extractToolRegistrations(srcDir);
-    if (tools) {
-      parts.push('=== Registered Tools ===');
-      parts.push(tools);
+    const toolsDir = path.join(srcDir, 'tools');
+    if (fs.existsSync(toolsDir)) {
+      const toolSnippets: string[] = [];
+      for (const file of fs.readdirSync(toolsDir).filter(f => f.endsWith('.ts')).slice(0, 8)) {
+        const content = fs.readFileSync(path.join(toolsDir, file), 'utf-8');
+        const matches = content.matchAll(/name:\s*['"`]([^'"`]+)['"`][\s\S]*?description:\s*['"`]([^'"`]+)['"`]/g);
+        for (const match of matches) {
+          toolSnippets.push(`- ${match[1]}: ${match[2]}`);
+        }
+      }
+      if (toolSnippets.length > 0) {
+        parts.push('=== Registered Tools ===');
+        parts.push(toolSnippets.join('\n'));
+      }
     }
 
-    // index.ts / agent.ts (entry point)
     for (const entry of ['index.ts', 'agent.ts']) {
       const entryPath = path.join(srcDir, entry);
       if (fs.existsSync(entryPath)) {
         const content = fs.readFileSync(entryPath, 'utf-8');
-        if (content.length < 5000) {
-          parts.push(`=== src/${entry} ===`);
-          parts.push(content);
-        } else {
-          // Just the first 100 lines
-          parts.push(`=== src/${entry} (first 100 lines) ===`);
-          parts.push(content.split('\n').slice(0, 100).join('\n'));
-        }
+        const lines = content.split('\n').slice(0, 100).join('\n');
+        parts.push(`=== src/${entry} (first 100 lines) ===`);
+        parts.push(lines);
+        break;
       }
     }
   }
 
-  // package.json (for dependencies)
   const pkgPath = path.join(repoPath, 'package.json');
   if (fs.existsSync(pkgPath)) {
     try {
@@ -140,32 +118,66 @@ function extractSourceContext(repoPath: string): string {
   return combined.length > MAX_SOURCE_CHARS ? combined.slice(0, MAX_SOURCE_CHARS) + '\n...(truncated)' : combined;
 }
 
-// ── LLM Call ──
+// ── Caching ───────────────────────────────────────────────────────────
 
-async function generateReadmeWithLLM(
+function getContextHash(context: string): string {
+  return crypto.createHash('sha256').update(context).digest('hex').slice(0, 16);
+}
+
+function isCached(repoName: string, hash: string): boolean {
+  const cachePath = path.join(CACHE_DIR, `${repoName}.hash`);
+  if (!fs.existsSync(cachePath)) return false;
+  return fs.readFileSync(cachePath, 'utf-8').trim() === hash;
+}
+
+function writeCache(repoName: string, hash: string): void {
+  if (!fs.existsSync(CACHE_DIR)) {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+  }
+  fs.writeFileSync(path.join(CACHE_DIR, `${repoName}.hash`), hash);
+}
+
+// ── LLM Call ──────────────────────────────────────────────────────────
+
+async function updateReadmeWithLLM(
   name: string,
   repoType: string,
   sourceContext: string,
-  config: { baseUrl: string; apiKey: string },
+  existingReadme: string | null,
+  config: ModelManagerConfig,
 ): Promise<string> {
-  const systemPrompt = `You are a technical documentation writer for the AGENTS multi-agent orchestration platform.
-Generate a comprehensive README.md for the package "${name}" (type: ${repoType}).
+  const isUpdate = existingReadme && existingReadme.length > 200;
+
+  const systemPrompt = isUpdate
+    ? `You are updating an existing README.md for "${name}" (type: ${repoType}) in the AGENTS platform.
 
 Rules:
-- Write in clear, concise technical English
-- Include ALL sections: Overview, Quick Start, Tools (with table), Configuration, Architecture, Development
-- For the Tools section, create a proper markdown table with | Tool | Description | columns
-- For Architecture, describe the data flow and key components
-- For Quick Start, include actual commands (npm install, kadi install, kadi run start)
-- Do NOT include badges, shields, or external images
-- Do NOT wrap the output in a code block — output raw markdown directly
+- Compare the existing README against the updated source context
+- Only modify sections that are outdated, incomplete, or missing based on the new source
+- Preserve hand-written content, custom sections, and formatting that is still accurate
+- Add new sections only if the source shows new functionality not documented
+- Keep the same markdown structure and style as the existing README
+- If nothing needs changing, return the README unchanged
+- Do NOT wrap output in a code block — output raw markdown
+- Keep it under 300 lines
+- Be specific — use actual tool names, config fields, file paths from the source`
+    : `You are generating a README.md for "${name}" (type: ${repoType}) in the AGENTS platform.
+
+Rules:
+- Include sections: Overview, Quick Start, Tools (table), Configuration, Architecture, Development
+- For Tools: create a markdown table with | Tool | Description | columns
+- For Architecture: describe data flow and key components
+- For Quick Start: include actual commands (npm install, kadi run start)
+- Do NOT include badges or external images
+- Do NOT wrap output in a code block — output raw markdown
 - Start with "# ${name}" as the first line
 - Include a one-line description blockquote after the title
-- Be specific — use actual tool names, actual config fields, actual file paths from the source context
-- If the source shows tool registrations, document each tool with its actual name and description
+- Be specific — use actual tool names, config fields, file paths from the source
 - Keep it under 300 lines`;
 
-  const userPrompt = `Generate a README.md for this package. Here is the source code context:\n\n${sourceContext}`;
+  const userPrompt = isUpdate
+    ? `Here is the current README:\n\n${existingReadme}\n\n---\n\nHere is the updated source context:\n\n${sourceContext}\n\nUpdate the README to reflect any changes. Only modify what's outdated.`
+    : `Generate a README.md for this package. Here is the source code context:\n\n${sourceContext}`;
 
   const response = await fetch(`${config.baseUrl}/v1/chat/completions`, {
     method: 'POST',
@@ -186,81 +198,101 @@ Rules:
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Model-manager HTTP ${response.status}: ${text}`);
+    throw new Error(`Model-manager HTTP ${response.status}: ${text.slice(0, 200)}`);
   }
 
   const data = await response.json() as any;
   return data.choices?.[0]?.message?.content || '';
 }
 
-// ── Main ──
+// ── Main ──────────────────────────────────────────────────────────────
 
 async function main() {
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
   const repos: Record<string, RepoConfig> = config.repos;
 
-  // Get model-manager credentials
   const mmConfig = getModelManagerConfig();
   if (!mmConfig) {
-    console.error('[readme-gen] ERROR: MODEL_MANAGER_BASE_URL and MODEL_MANAGER_API_KEY not found.');
-    console.error('[readme-gen] Set them as env vars or ensure secrets.toml is accessible via `kadi secret get`.');
+    console.error('[readme-gen] No model-manager credentials found. Set MODEL_MANAGER_BASE_URL and MODEL_MANAGER_API_KEY.');
     process.exit(1);
   }
 
-  console.log(`[readme-gen] Model-manager: ${mmConfig.baseUrl}`);
-  console.log(`[readme-gen] Model: ${MODEL}`);
+  const force = process.argv.includes('--force');
+  const reposIdx = process.argv.indexOf('--repos');
+  const filterRepos = reposIdx !== -1 ? process.argv[reposIdx + 1]?.split(',') : null;
 
-  // Filter repos to process
-  const targetRepos = process.argv.slice(2);
-  let updated = 0;
-  let skipped = 0;
+  // Collect work items
+  const workItems: Array<{ name: string; repo: RepoConfig; repoPath: string; context: string; hash: string; existingReadme: string | null }> = [];
 
   for (const [name, repo] of Object.entries(repos)) {
-    if (targetRepos.length > 0 && !targetRepos.includes(name)) continue;
+    if (filterRepos && !filterRepos.includes(name)) continue;
 
     const repoPath = path.resolve(PROJECT_ROOT, repo.path);
     if (!fs.existsSync(repoPath)) {
       console.log(`[readme-gen] SKIP ${name} — path not found`);
-      skipped++;
+      continue;
+    }
+
+    const context = extractSourceContext(repoPath);
+    const hash = getContextHash(context);
+
+    if (!force && isCached(name, hash)) {
       continue;
     }
 
     const readmePath = path.join(repoPath, 'README.md');
+    const existingReadme = fs.existsSync(readmePath) ? fs.readFileSync(readmePath, 'utf-8') : null;
 
-    // Skip repos that already have substantial READMEs (>2KB)
-    if (fs.existsSync(readmePath)) {
-      const existing = fs.readFileSync(readmePath, 'utf-8');
-      if (existing.length > 2000 && !existing.includes('<!-- TODO:')) {
-        console.log(`[readme-gen] SKIP ${name} — README already has content (${existing.length} chars)`);
-        skipped++;
-        continue;
-      }
-    }
-
-    console.log(`[readme-gen] Generating README for ${name}...`);
-
-    try {
-      const sourceContext = extractSourceContext(repoPath);
-      const readme = await generateReadmeWithLLM(name, repo.type, sourceContext, mmConfig);
-
-      if (readme && readme.length > 100) {
-        fs.writeFileSync(readmePath, readme, 'utf-8');
-        console.log(`[readme-gen] WROTE ${name}/README.md (${readme.length} chars)`);
-        updated++;
-      } else {
-        console.log(`[readme-gen] SKIP ${name} — LLM returned empty/short response`);
-        skipped++;
-      }
-    } catch (err: any) {
-      console.error(`[readme-gen] ERROR ${name}: ${err.message}`);
-      skipped++;
-    }
-
-    // Small delay to avoid rate limiting
-    await new Promise(r => setTimeout(r, 500));
+    workItems.push({ name, repo, repoPath, context, hash, existingReadme });
   }
 
-  console.log(`[readme-gen] Done — ${updated} READMEs generated, ${skipped} skipped`);
+  if (workItems.length === 0) {
+    console.log('[readme-gen] All READMEs up to date (no source changes detected)');
+    return;
+  }
+
+  console.log(`[readme-gen] ${workItems.length} repos to process (concurrency: ${CONCURRENCY})`);
+
+  let updated = 0;
+
+  const processItem = async (item: typeof workItems[0]): Promise<boolean> => {
+    const { name, repo, repoPath, context, hash, existingReadme } = item;
+    const action = existingReadme ? 'Updating' : 'Generating';
+    console.log(`[readme-gen] ${action}: ${name}…`);
+
+    try {
+      const readme = await updateReadmeWithLLM(name, repo.type, context, existingReadme, mmConfig);
+
+      if (!readme || readme.length < 100) {
+        console.warn(`[readme-gen] ${name}: LLM returned empty/short response, skipping`);
+        return false;
+      }
+
+      const readmePath = path.join(repoPath, 'README.md');
+      fs.writeFileSync(readmePath, readme, 'utf-8');
+      writeCache(name, hash);
+      console.log(`[readme-gen] ${name}: done (${readme.length} chars)`);
+      return true;
+    } catch (err: any) {
+      console.error(`[readme-gen] ${name}: FAILED — ${err.message}`);
+      return false;
+    }
+  };
+
+  // Concurrent worker pool
+  let index = 0;
+  const worker = async () => {
+    while (index < workItems.length) {
+      const item = workItems[index++];
+      const success = await processItem(item);
+      if (success) updated++;
+    }
+  };
+
+  const workers = Array.from({ length: Math.min(CONCURRENCY, workItems.length) }, () => worker());
+  await Promise.all(workers);
+
+  console.log(`[readme-gen] Done — ${updated} READMEs updated`);
 }
 
 main().catch(err => {
