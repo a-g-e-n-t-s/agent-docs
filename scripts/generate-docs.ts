@@ -20,7 +20,7 @@ import { execSync } from 'child_process';
 
 const CONFIG_PATH = path.resolve(import.meta.dirname, '..', 'config.json');
 const CACHE_DIR = path.resolve(import.meta.dirname, '..', '.cache', 'docs-gen');
-const DOCS_DIR = path.resolve(import.meta.dirname, '..', 'docs');
+const DOCS_DIR = path.resolve(import.meta.dirname, '..', 'src', 'content', 'docs');
 const MAX_SOURCE_CHARS = 20_000;
 const MODEL = 'gpt-5-mini';
 
