@@ -32,7 +32,7 @@ npm run build          # sync + astro build
 ## Tools
 
 - agents-docs-config: Read and describe the current agent-docs configuration. Shows site settings, repo list, and agent config.
-- agents-docs-pipeline: Full documentation pipeline: sync repos → collect markdown → reindex into ArcadeDB.
+- agents-docs-pipeline: Full documentation pipeline: sync repos → collect markdown → chunk+embed via graph-index → create edges.
 - agents-docs-readme-generate: Generate or update README.md files for all repos. Fills missing sections from agent.json metadata.
 - agents-docs-readme-lint: Validate README.md files against templates for each repo type.
 - agents-docs-search: Search AGENTS documentation using 4-signal hybrid recall (semantic + keyword + graph + structural).
@@ -167,5 +167,7 @@ npx tsx src/agent.ts
 ```
 
 This README preserves the previously handwritten structure and updates the configuration, tooling, and development instructions to match the current repository sources.
+
+---
 
 ---
