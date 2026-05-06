@@ -23,6 +23,7 @@ const CACHE_DIR = path.resolve(import.meta.dirname, '..', '.cache', 'docs-gen');
 const DOCS_DIR = path.resolve(import.meta.dirname, '..', 'src', 'content', 'docs');
 const MAX_SOURCE_CHARS = 20_000;
 const MODEL = 'gpt-5-mini';
+const CONCURRENCY = 5;
 
 interface RepoConfig {
   path: string;
@@ -273,6 +274,9 @@ export async function generateDocs(options?: {
 
   let generated = 0;
 
+  // Collect work items (skip cached and missing repos)
+  const workItems: Array<{ name: string; repo: RepoConfig; repoPath: string; context: string; hash: string }> = [];
+
   for (const [name, repo] of Object.entries(repos)) {
     if (filterRepos && !filterRepos.includes(name)) continue;
 
@@ -282,15 +286,25 @@ export async function generateDocs(options?: {
       continue;
     }
 
-    // Collect source context
     const context = collectSourceContext(repoPath, repo.crawl);
     const hash = getContextHash(context);
 
-    // Check cache
     if (!force && isCached(name, hash)) {
-      continue; // unchanged
+      continue;
     }
 
+    workItems.push({ name, repo, repoPath, context, hash });
+  }
+
+  if (workItems.length === 0) {
+    return 0;
+  }
+
+  console.log(`[generate-docs] ${workItems.length} repos to generate (concurrency: ${CONCURRENCY})`);
+
+  // Process in parallel with concurrency limit
+  const processItem = async (item: typeof workItems[0]): Promise<boolean> => {
+    const { name, repo, context, hash } = item;
     console.log(`[generate-docs] Generating: ${name} (${repo.type})…`);
 
     try {
@@ -298,13 +312,10 @@ export async function generateDocs(options?: {
 
       if (!markdown || markdown.length < 100) {
         console.warn(`[generate-docs] ${name}: LLM returned empty/short response, skipping`);
-        continue;
+        return false;
       }
 
-      // Add Starlight frontmatter if missing
       const finalContent = ensureFrontmatter(markdown, name, repo.description);
-
-      // Write to docs directory
       const subdir = getOutputSubdir(name, repo.type);
       const outputDir = path.join(DOCS_DIR, subdir);
       if (!fs.existsSync(outputDir)) {
@@ -313,13 +324,37 @@ export async function generateDocs(options?: {
 
       fs.writeFileSync(path.join(outputDir, 'index.md'), finalContent);
       writeCache(name, hash);
-      generated++;
 
       console.log(`[generate-docs] ${name}: done (${finalContent.split('\n').length} lines)`);
+      return true;
     } catch (err: any) {
       console.error(`[generate-docs] ${name}: FAILED — ${err.message}`);
+      return false;
     }
-  }
+  };
+
+  // Concurrency-limited execution
+  let active = 0;
+  let index = 0;
+  const results: Promise<boolean>[] = [];
+
+  const next = (): Promise<boolean> | null => {
+    if (index >= workItems.length) return null;
+    const item = workItems[index++];
+    return processItem(item);
+  };
+
+  const worker = async () => {
+    while (index < workItems.length) {
+      const promise = next();
+      if (!promise) break;
+      const success = await promise;
+      if (success) generated++;
+    }
+  };
+
+  const workers = Array.from({ length: Math.min(CONCURRENCY, workItems.length) }, () => worker());
+  await Promise.all(workers);
 
   return generated;
 }
