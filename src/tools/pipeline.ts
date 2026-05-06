@@ -1,7 +1,8 @@
 /**
  * agents-docs-pipeline — Full sync → index pipeline.
  *
- * Orchestrates: sync repos → collect pages → reindex into ArcadeDB.
+ * Orchestrates: sync repos → collect pages → chunk+embed via graph-index → create edges.
+ * Calls ability-graph's graph-index directly (no ability-docs-memory dependency for indexing).
  * Runs as a background task, returns taskId immediately.
  */
 
@@ -10,39 +11,50 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { z } from '@kadi.build/core';
 import type { DocsConfig } from '../config/types.js';
-import { startTask, getTask } from '../utils/tasks.js';
+import { startTask } from '../utils/tasks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
-const DOCS_DIR = path.join(PROJECT_ROOT, 'docs');
+
+const DEFAULT_COLLECTION = 'agents-docs';
+const DEFAULT_DATABASE = 'kadi';
+const MAX_TOKENS_PER_CHUNK = 500;
+const INDEX_CONCURRENCY = 5;
+
+interface IndexedPage {
+  slug: string;
+  chunkRids: string[];
+}
 
 export function registerPipelineTool(
   client: any,
   config: DocsConfig,
-  docsMemoryAbility?: any,
 ): void {
   client.registerTool(
     {
       name: 'agents-docs-pipeline',
       description:
-        'Full documentation pipeline: sync repos → collect markdown → reindex into ArcadeDB. ' +
+        'Full documentation pipeline: sync repos → collect markdown → chunk+embed via graph-index → create edges. ' +
         'Runs as a background task and returns a taskId for polling.',
       input: z.object({
         repos: z.array(z.string()).optional()
           .describe('Specific repos to process (default: all)'),
         skipIndex: z.boolean().optional()
-          .describe('Skip ArcadeDB reindexing (default: false)'),
+          .describe('Skip graph indexing (default: false)'),
         collection: z.string().optional()
           .describe('Target collection name (default: agents-docs)'),
+        database: z.string().optional()
+          .describe('Target database (default: kadi)'),
       }),
     },
-    async (input: { repos?: string[]; skipIndex?: boolean; collection?: string }) => {
+    async (input: { repos?: string[]; skipIndex?: boolean; collection?: string; database?: string }) => {
       const taskId = startTask(async () => {
         const startTime = Date.now();
-        const collection = input.collection ?? 'agents-docs';
+        const collection = input.collection ?? DEFAULT_COLLECTION;
+        const database = input.database ?? DEFAULT_DATABASE;
 
-        // Step 1: Sync — collect markdown files
-        console.error('[pipeline] Step 1: Syncing repos…');
+        // Step 1: Collect pages from repos
+        console.error('[pipeline] Step 1: Collecting pages…');
         const reposToSync = input.repos
           ? Object.entries(config.repos).filter(([name]) => input.repos!.includes(name))
           : Object.entries(config.repos);
@@ -59,7 +71,6 @@ export function registerPipelineTool(
           const repoPath = path.resolve(PROJECT_ROOT, repo.path);
           if (!fs.existsSync(repoPath)) continue;
 
-          // Use indexCrawl for graph indexing if defined, otherwise fall back to crawl
           const crawlPatterns = (repo as any).indexCrawl ?? repo.crawl;
           const mdFiles = collectMarkdownFiles(repoPath, crawlPatterns);
           for (const file of mdFiles) {
@@ -77,7 +88,7 @@ export function registerPipelineTool(
             });
           }
 
-          // Also parse agent.json if it exists
+          // Also parse agent.json
           const agentJsonPath = path.join(repoPath, 'agent.json');
           if (fs.existsSync(agentJsonPath)) {
             try {
@@ -90,36 +101,133 @@ export function registerPipelineTool(
                 source: `${name}/agent.json`,
                 content: agentDoc,
               });
-            } catch {
-              // Skip malformed agent.json
-            }
+            } catch { /* skip malformed */ }
           }
         }
 
         console.error(`[pipeline] Step 1 done: ${pages.length} pages collected`);
 
-        // Step 2: Reindex into ArcadeDB
-        if (!input.skipIndex && pages.length > 0) {
-          console.error(`[pipeline] Step 2: Reindexing ${pages.length} pages into collection "${collection}"…`);
-
-          try {
-            const reindexPayload = { pages, collection, clearExisting: true };
-            const result = docsMemoryAbility
-              ? await docsMemoryAbility.invoke('docs-reindex', reindexPayload)
-              : await client.invokeRemote('docs-reindex', reindexPayload);
-            console.error(`[pipeline] Step 2 done:`, JSON.stringify(result));
-          } catch (err: any) {
-            console.error(`[pipeline] Step 2 failed: ${err?.message ?? err}`);
-          }
-        } else if (input.skipIndex) {
-          console.error('[pipeline] Step 2: Skipped (skipIndex=true)');
+        if (input.skipIndex || pages.length === 0) {
+          return { pages: pages.length, repos: reposToSync.length, collection, indexed: false, durationMs: Date.now() - startTime };
         }
+
+        // Step 2: Clear existing DocNodes in collection
+        console.error(`[pipeline] Step 2: Clearing existing DocNodes in "${collection}"…`);
+        try {
+          await client.invokeRemote('graph-command', {
+            database,
+            command: `DELETE VERTEX DocNode WHERE collection = '${escapeSQL(collection)}'`,
+          });
+        } catch {
+          // May fail if empty or type doesn't exist — safe to ignore
+        }
+
+        // Step 3: Index pages via graph-index (with concurrency limit)
+        console.error(`[pipeline] Step 3: Indexing ${pages.length} pages via graph-index (concurrency: ${INDEX_CONCURRENCY})…`);
+
+        const indexedPages: IndexedPage[] = [];
+        let totalChunks = 0;
+        let idx = 0;
+
+        const worker = async () => {
+          while (idx < pages.length) {
+            const page = pages[idx++];
+            try {
+              const result = await client.invokeRemote('graph-index', {
+                content: page.content,
+                vertexType: 'DocNode',
+                strategy: 'markdown-headers',
+                maxTokens: MAX_TOKENS_PER_CHUNK,
+                database,
+                source: page.source,
+                collection,
+                properties: {
+                  title: page.title,
+                  slug: page.slug,
+                  pageUrl: page.pageUrl,
+                  indexedAt: new Date().toISOString(),
+                },
+              });
+
+              if (result?.success && result.chunks) {
+                const rids = (result.chunks as Array<{ rid: string; chunkIndex: number }>)
+                  .sort((a, b) => a.chunkIndex - b.chunkIndex)
+                  .map(c => c.rid);
+                indexedPages.push({ slug: page.slug, chunkRids: rids });
+                totalChunks += result.indexed ?? rids.length;
+              }
+            } catch (err: any) {
+              console.warn(`[pipeline] graph-index failed for "${page.slug}": ${err?.message ?? err}`);
+            }
+          }
+        };
+
+        const workers = Array.from(
+          { length: Math.min(INDEX_CONCURRENCY, pages.length) },
+          () => worker(),
+        );
+        await Promise.all(workers);
+
+        console.error(`[pipeline] Step 3 done: ${totalChunks} chunks across ${indexedPages.length} pages`);
+
+        if (totalChunks === 0) {
+          return { pages: pages.length, repos: reposToSync.length, collection, chunks: 0, durationMs: Date.now() - startTime };
+        }
+
+        // Step 4: Create NextSection edges
+        console.error(`[pipeline] Step 4: Creating NextSection edges…`);
+        let nextSectionCreated = 0;
+
+        for (const { chunkRids } of indexedPages) {
+          for (let i = 0; i < chunkRids.length - 1; i++) {
+            try {
+              await client.invokeRemote('graph-command', {
+                database,
+                command: `CREATE EDGE NextSection FROM ${chunkRids[i]} TO ${chunkRids[i + 1]}`,
+              });
+              nextSectionCreated++;
+            } catch { /* non-fatal */ }
+          }
+        }
+
+        console.error(`[pipeline] Step 4 done: ${nextSectionCreated} NextSection edges`);
+
+        // Step 5: Create References edges for cross-doc links
+        console.error(`[pipeline] Step 5: Creating References edges…`);
+        const slugToRids = new Map(indexedPages.map(p => [p.slug, p.chunkRids]));
+        let referencesCreated = 0;
+
+        for (const page of pages) {
+          const refs = extractCrossDocLinks(page.content, page.slug, slugToRids);
+          const sourceRids = slugToRids.get(page.slug);
+          if (!sourceRids?.[0]) continue;
+
+          for (const ref of refs) {
+            const targetRids = slugToRids.get(ref.targetSlug);
+            if (!targetRids?.[0]) continue;
+
+            try {
+              await client.invokeRemote('graph-command', {
+                database,
+                command: `CREATE EDGE References FROM ${sourceRids[0]} TO ${targetRids[0]} SET linkText = '${escapeSQL(ref.linkText)}', sourceSlug = '${escapeSQL(page.slug)}'`,
+              });
+              referencesCreated++;
+            } catch { /* non-fatal */ }
+          }
+        }
+
+        console.error(`[pipeline] Step 5 done: ${referencesCreated} References edges`);
+        const durationMs = Date.now() - startTime;
+        console.error(`[pipeline] Complete: ${totalChunks} chunks, ${nextSectionCreated} NextSection, ${referencesCreated} References (${durationMs}ms)`);
 
         return {
           pages: pages.length,
           repos: reposToSync.length,
           collection,
-          durationMs: Date.now() - startTime,
+          chunks: totalChunks,
+          nextSectionEdges: nextSectionCreated,
+          referencesEdges: referencesCreated,
+          durationMs,
         };
       });
 
@@ -131,6 +239,8 @@ export function registerPipelineTool(
     },
   );
 }
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function collectMarkdownFiles(repoPath: string, patterns: string[]): string[] {
   const files: string[] = [];
@@ -149,9 +259,7 @@ function collectMarkdownFiles(repoPath: string, patterns: string[]): string[] {
           }
         }
       }
-    } catch {
-      // Permission error or similar — skip
-    }
+    } catch { /* permission error — skip */ }
   };
 
   walkDir(repoPath);
@@ -203,4 +311,52 @@ function generateAgentJsonDoc(name: string, agent: any): string {
   }
 
   return lines.join('\n');
+}
+
+interface CrossDocRef {
+  targetSlug: string;
+  linkText: string;
+}
+
+function extractCrossDocLinks(
+  content: string,
+  currentSlug: string,
+  knownSlugs: Map<string, string[]>,
+): CrossDocRef[] {
+  const refs: CrossDocRef[] = [];
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkRegex.exec(content)) !== null) {
+    const linkText = match[1];
+    const href = match[2];
+
+    if (href.startsWith('http') || href.startsWith('#')) continue;
+
+    const normalized = href
+      .replace(/\.md$/, '')
+      .replace(/^\.\//, '')
+      .replace(/\\/g, '/');
+
+    // Try to resolve relative to current slug's directory
+    const currentDir = currentSlug.includes('/') ? currentSlug.split('/').slice(0, -1).join('/') : '';
+    const candidates = [
+      normalized,
+      `${currentDir}/${normalized}`,
+      normalized.replace(/^\//, ''),
+    ];
+
+    for (const candidate of candidates) {
+      if (knownSlugs.has(candidate) && candidate !== currentSlug) {
+        refs.push({ targetSlug: candidate, linkText });
+        break;
+      }
+    }
+  }
+
+  return refs;
+}
+
+function escapeSQL(str: string): string {
+  return str.replace(/'/g, "\\'");
 }

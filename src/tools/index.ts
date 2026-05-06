@@ -22,7 +22,7 @@ export function registerAllTools(
   registerStatusTool(client, config);
   registerConfigTool(client, config);
   registerSyncTool(client, config);
-  registerPipelineTool(client, config, docsMemoryAbility);
+  registerPipelineTool(client, config);
   registerSearchTools(client, config, apiKey, docsMemoryAbility);
   registerReadmeLintTool(client, config);
   registerReadmeGenerateTool(client, config);
