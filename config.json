@@ -6,6 +6,7 @@
     "baseUrl": "/",
     "port": 3333
   },
+  "crawlIgnore": ["node_modules/**", "dist/**", "*.lock", "*.map", "*.d.ts", "abilities/**", ".git/**"],
   "repos": {
     "agents-core": {
       "path": "..",
@@ -17,7 +18,7 @@
       "path": "../agents-library",
       "description": "Shared agent utilities, factories, and base classes",
       "type": "kadi-package",
-      "crawl": ["README.md"],
+      "crawl": ["README.md", "src/**/*.ts"],
       "generateApi": true,
       "entryPoints": ["src/index.ts"]
     },
@@ -25,73 +26,73 @@
       "path": "../agent-producer",
       "description": "Orchestrator agent — decomposes quests into tasks",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "agent-worker": {
       "path": "../agent-worker",
       "description": "Programmer agent — executes coding tasks",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts", "config/**/*.toml"]
     },
     "agent-lead": {
       "path": "../agent-lead",
       "description": "Tech lead agent — reviews and assigns tasks",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "agent-qa": {
       "path": "../agent-qa",
       "description": "QA agent — verifies task completion",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "agent-chatbot": {
       "path": "../agent-chatbot",
       "description": "Chat platform agent — Discord/Slack integration",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "agent-quest": {
       "path": "../agent-quest",
       "description": "Quest management UI and server",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "server/src/**/*.ts", "client/src/**/*.{ts,tsx}"]
     },
     "mcp-server-quest": {
       "path": "../mcp-server-quest",
       "description": "Quest protocol MCP server",
       "type": "kadi-package",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "mcp-server-git": {
       "path": "../mcp-server-git",
       "description": "Git operations MCP server",
       "type": "kadi-package",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-memory": {
       "path": "../ability-memory",
-      "description": "Memory domain layer — task memory, feedback, role-based context",
+      "description": "Memory domain layer — fact reconciliation, entity dedup, soft-delete",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts", "config.toml"]
     },
     "ability-graph": {
       "path": "../ability-graph",
-      "description": "Graph engine — N-signal hybrid search, ArcadeDB integration",
+      "description": "Graph engine — N-signal hybrid search, chunking, entity dedup, ArcadeDB",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts", "config.toml"]
     },
     "ability-search": {
       "path": "../ability-search",
-      "description": "Search engine — chunking, embedding, hybrid text search",
+      "description": "Search engine — chunking, embedding, hybrid text search (deprecated, use ability-graph)",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-arcadedb": {
       "path": "../ability-arcadedb",
       "description": "ArcadeDB wrapper — database admin, backup/restore",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-secret": {
       "path": "../ability-secret",
@@ -103,43 +104,43 @@
       "path": "../ability-eval",
       "description": "Code evaluation ability",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-vision": {
       "path": "../ability-vision",
       "description": "Vision/screenshot ability",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-file-local": {
       "path": "../ability-file-local",
       "description": "Local filesystem operations",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-file-remote": {
       "path": "../ability-file-remote",
       "description": "Remote filesystem operations",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-file-cloud": {
       "path": "../ability-file-cloud",
       "description": "Cloud storage operations",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-docs-memory": {
       "path": "../ability-docs-memory",
       "description": "Documentation search engine — 4-signal hybrid recall",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts", "config.toml"]
     },
     "ability-backup": {
       "path": "../ability-backup",
       "description": "Backup and restore ability",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-deploy": {
       "path": "../ability-deploy",
@@ -151,43 +152,43 @@
       "path": "../ability-tunnel",
       "description": "Network tunnel ability",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-voice": {
       "path": "../ability-voice",
       "description": "Voice/audio ability",
       "type": "kadi-ability",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "agent-docs": {
       "path": "../agent-docs",
-      "description": "Documentation engine and Docusaurus site for AGENTS",
+      "description": "Documentation engine and Astro site for AGENTS",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts", "scripts/**/*.ts"]
     },
     "agent-expert": {
       "path": "../agent-expert",
       "description": "Expert agent — answers questions about AGENTS using docs search",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "agent-builder": {
       "path": "../agent-builder",
       "description": "Builder agent — scaffolds new agents and abilities",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "agent-shadow-worker": {
       "path": "../agent-shadow-worker",
       "description": "Shadow worker agent — parallel task execution",
       "type": "kadi-agent",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "mcp-server-github": {
       "path": "../mcp-server-github",
       "description": "GitHub operations MCP server",
       "type": "kadi-package",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "template-agent-python": {
       "path": "../template-agent-python",
@@ -199,19 +200,19 @@
       "path": "../template-agent-typescript",
       "description": "TypeScript agent template",
       "type": "kadi-package",
-      "crawl": ["README.md", "agent.json"]
+      "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "engine": {
       "path": "../../Engine",
       "description": "Daemon Engine — C++20 game engine with DirectX 11, V8 scripting",
       "type": "cpp-engine",
-      "crawl": ["README.md", "CLAUDE.md", "Docs/**/*.md"]
+      "crawl": ["README.md", "CLAUDE.md", "Docs/**/*.md", "Code/**/*.hpp", "Code/**/*.cpp"]
     },
     "daemon-agent": {
       "path": "../../DaemonAgent",
       "description": "DaemonAgent — dual-language game project (C++20 + TypeScript)",
       "type": "cpp-game",
-      "crawl": ["CLAUDE.md", "Docs/**/*.md", "openspec/**/*.md"]
+      "crawl": ["CLAUDE.md", "Docs/**/*.md", "openspec/**/*.md", "Run/Data/Scripts/**/*.js"]
     }
   },
   "output": {
