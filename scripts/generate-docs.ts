@@ -136,18 +136,9 @@ function collectSourceContext(repoPath: string, crawlPatterns: string[]): string
     } catch { /* skip */ }
   }
 
-  // README.md (existing docs)
-  const readmePath = path.join(repoPath, 'README.md');
-  if (fs.existsSync(readmePath)) {
-    const readme = fs.readFileSync(readmePath, 'utf-8');
-    if (readme.length < 3000) {
-      parts.push('=== README.md ===');
-      parts.push(readme);
-    } else {
-      parts.push('=== README.md (first 50 lines) ===');
-      parts.push(readme.split('\n').slice(0, 50).join('\n'));
-    }
-  }
+  // NOTE: README.md intentionally excluded from source context.
+  // It's an output of the pipeline (readme-gen), not an input.
+  // Including it causes a feedback loop where every run regenerates.
 
   const combined = parts.join('\n\n');
   return combined.length > MAX_SOURCE_CHARS
