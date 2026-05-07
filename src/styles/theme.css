@@ -135,6 +135,28 @@
   color: #555555 !important;
 }
 
+/* Light mode — search modal/dialog */
+[data-theme='light'] dialog,
+[data-theme='light'] [data-pagefind-ui],
+[data-theme='light'] .pagefind-ui,
+[data-theme='light'] dialog[open] {
+  background: #ffffff !important;
+  color: #171717 !important;
+}
+
+[data-theme='light'] dialog input,
+[data-theme='light'] [data-pagefind-ui] input,
+[data-theme='light'] .pagefind-ui__search-input {
+  background: #ffffff !important;
+  border-color: #e5e5e5 !important;
+  color: #171717 !important;
+}
+
+[data-theme='light'] dialog input::placeholder,
+[data-theme='light'] .pagefind-ui__search-input::placeholder {
+  color: #999999 !important;
+}
+
 /* ═══════════════════════════════════════════
    Base
    ═══════════════════════════════════════════ */
