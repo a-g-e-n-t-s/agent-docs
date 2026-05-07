@@ -76,6 +76,55 @@
   --sl-color-text-accent: #0060d0;
 }
 
+/* Light mode — sidebar and search overrides */
+[data-theme='light'] .sidebar-content,
+[data-theme='light'] nav.sidebar {
+  color: #333333;
+}
+
+[data-theme='light'] .sidebar-content a,
+[data-theme='light'] nav.sidebar a {
+  color: #333333;
+}
+
+[data-theme='light'] .sidebar-content a:hover,
+[data-theme='light'] nav.sidebar a:hover {
+  color: #0060d0;
+}
+
+[data-theme='light'] .sidebar-content summary,
+[data-theme='light'] nav.sidebar summary {
+  color: #171717;
+}
+
+[data-theme='light'] .sidebar-content a[aria-current="page"],
+[data-theme='light'] nav.sidebar a[aria-current="page"] {
+  color: #0060d0 !important;
+  background: rgba(0, 96, 208, 0.08) !important;
+}
+
+/* Light mode — search bar */
+[data-theme='light'] site-search button,
+[data-theme='light'] [data-pagefind-ui] input,
+[data-theme='light'] .search-input,
+[data-theme='light'] button[data-open-modal] {
+  background: #ffffff !important;
+  border-color: #e5e5e5 !important;
+  color: #171717 !important;
+}
+
+[data-theme='light'] site-search button span,
+[data-theme='light'] button[data-open-modal] span {
+  color: #555555 !important;
+}
+
+[data-theme='light'] site-search button kbd,
+[data-theme='light'] button[data-open-modal] kbd {
+  background: #f5f5f5 !important;
+  border-color: #d4d4d4 !important;
+  color: #555555 !important;
+}
+
 /* ═══════════════════════════════════════════
    Base
    ═══════════════════════════════════════════ */
