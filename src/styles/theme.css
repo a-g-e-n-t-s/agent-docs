@@ -79,7 +79,7 @@
 /* Light mode — sidebar and search overrides */
 [data-theme='light'] .sidebar-content,
 [data-theme='light'] nav.sidebar {
-  color: #333333;
+  color: #171717;
 }
 
 [data-theme='light'] .sidebar-content a,
@@ -93,8 +93,17 @@
 }
 
 [data-theme='light'] .sidebar-content summary,
-[data-theme='light'] nav.sidebar summary {
-  color: #171717;
+[data-theme='light'] nav.sidebar summary,
+[data-theme='light'] .sidebar-content .large,
+[data-theme='light'] .sidebar-content .top-level > summary,
+[data-theme='light'] nav.sidebar details > summary {
+  color: #171717 !important;
+  background: transparent !important;
+}
+
+[data-theme='light'] .sidebar-content details > summary span,
+[data-theme='light'] nav.sidebar details > summary span {
+  color: #171717 !important;
 }
 
 [data-theme='light'] .sidebar-content a[aria-current="page"],
