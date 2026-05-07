@@ -62,15 +62,16 @@
   --sl-color-hairline-light: #f0f0f0;
   --sl-color-hairline-shade: #d4d4d4;
 
-  --sl-color-white: #ffffff;
-  --sl-color-gray-1: #171717;
-  --sl-color-gray-2: #333333;
-  --sl-color-gray-3: #555555;
-  --sl-color-gray-4: #888888;
+  /* Starlight uses white=strongest text, black=weakest */
+  --sl-color-white: #171717;
+  --sl-color-gray-1: #333333;
+  --sl-color-gray-2: #444444;
+  --sl-color-gray-3: #666666;
+  --sl-color-gray-4: #999999;
   --sl-color-gray-5: #d4d4d4;
   --sl-color-gray-6: #e5e5e5;
   --sl-color-gray-7: #f5f5f5;
-  --sl-color-black: #000000;
+  --sl-color-black: #ffffff;
 
   --sl-color-text: #171717;
   --sl-color-text-accent: #0060d0;
