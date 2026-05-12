@@ -54,7 +54,12 @@ function getOutputSubdir(name: string, type: string): string {
 
 // ── Source context collection ─────────────────────────────────────────
 
-function collectSourceContext(repoPath: string, crawlPatterns: string[]): string {
+function collectSourceContext(repoPath: string, crawlPatterns: string[], repoType?: string): string {
+  // C++ repos use a completely different context strategy
+  if (repoType === 'cpp-engine' || repoType === 'cpp-game') {
+    return collectCppSourceContext(repoPath, repoType);
+  }
+
   const parts: string[] = [];
 
   // agent.json
@@ -78,12 +83,10 @@ function collectSourceContext(repoPath: string, crawlPatterns: string[]): string
     const toolSnippets: string[] = [];
     for (const file of toolFiles.slice(0, 8)) {
       const content = fs.readFileSync(path.join(toolsDir, file), 'utf-8');
-      // Extract tool name and description from registerTool calls
       const toolMatches = content.matchAll(/name:\s*['"]([^'"]+)['"][\s\S]*?description:\s*['"]([^'"]+)/g);
       for (const match of toolMatches) {
         toolSnippets.push(`- ${match[1]}: ${match[2]}`);
       }
-      // Also include first 80 lines of each tool file for context
       const lines = content.split('\n').slice(0, 80).join('\n');
       if (lines.length < 4000) {
         parts.push(`=== src/tools/${file} (first 80 lines) ===`);
@@ -146,6 +149,102 @@ function collectSourceContext(repoPath: string, crawlPatterns: string[]): string
     : combined;
 }
 
+function collectCppSourceContext(repoPath: string, repoType: string): string {
+  const parts: string[] = [];
+
+  // CLAUDE.md — primary architecture source (10-14KB)
+  const claudeMdPath = path.join(repoPath, 'CLAUDE.md');
+  if (fs.existsSync(claudeMdPath)) {
+    const content = fs.readFileSync(claudeMdPath, 'utf-8');
+    parts.push('=== CLAUDE.md (architecture) ===');
+    parts.push(content.slice(0, 12000));
+  }
+
+  // Docs/**/*.md — technical documentation
+  const docsDir = path.join(repoPath, 'Docs');
+  if (fs.existsSync(docsDir)) {
+    const mdFiles = findFiles(docsDir, '.md').slice(0, 3);
+    for (const file of mdFiles) {
+      const content = fs.readFileSync(file, 'utf-8');
+      const relPath = path.relative(repoPath, file);
+      parts.push(`=== ${relPath} (first 3000 chars) ===`);
+      parts.push(content.slice(0, 3000));
+    }
+  }
+
+  // Key .hpp headers — module architecture
+  if (repoType === 'cpp-engine') {
+    const codeDir = path.join(repoPath, 'Code', 'Engine');
+    if (fs.existsSync(codeDir)) {
+      const keyHeaders = [
+        'Core/Engine.hpp',
+        'Core/EventSystem.hpp',
+        'Core/StateBuffer.hpp',
+        'Script/IJSGameLogicContext.hpp',
+        'Script/IScriptableObject.hpp',
+        'Renderer/Renderer.hpp',
+        'Entity/EntityState.hpp',
+        'Audio/AudioSystem.hpp',
+      ];
+      for (const header of keyHeaders) {
+        const headerPath = path.join(codeDir, header);
+        if (fs.existsSync(headerPath)) {
+          const content = fs.readFileSync(headerPath, 'utf-8');
+          const lines = content.split('\n').slice(0, 60).join('\n');
+          parts.push(`=== Code/Engine/${header} (first 60 lines) ===`);
+          parts.push(lines);
+        }
+      }
+    }
+  }
+
+  // V8 scripts — DaemonAgent game logic
+  if (repoType === 'cpp-game') {
+    const scriptsDir = path.join(repoPath, 'Run', 'Data', 'Scripts');
+    if (fs.existsSync(scriptsDir)) {
+      const keyScripts = ['main.js', 'JSEngine.js', 'JSGame.js'];
+      for (const script of keyScripts) {
+        const scriptPath = path.join(scriptsDir, script);
+        if (fs.existsSync(scriptPath)) {
+          const content = fs.readFileSync(scriptPath, 'utf-8');
+          const lines = content.split('\n').slice(0, 80).join('\n');
+          parts.push(`=== Run/Data/Scripts/${script} (first 80 lines) ===`);
+          parts.push(lines);
+        }
+      }
+      // KĀDI integration scripts
+      const kadiDir = path.join(scriptsDir, 'kadi');
+      if (fs.existsSync(kadiDir)) {
+        const kadiFiles = fs.readdirSync(kadiDir).filter(f => f.endsWith('.js')).slice(0, 4);
+        for (const file of kadiFiles) {
+          const content = fs.readFileSync(path.join(kadiDir, file), 'utf-8');
+          const lines = content.split('\n').slice(0, 60).join('\n');
+          parts.push(`=== Run/Data/Scripts/kadi/${file} (first 60 lines) ===`);
+          parts.push(lines);
+        }
+      }
+    }
+  }
+
+  const combined = parts.join('\n\n');
+  return combined.length > MAX_SOURCE_CHARS
+    ? combined.slice(0, MAX_SOURCE_CHARS) + '\n...(truncated)'
+    : combined;
+}
+
+function findFiles(dir: string, ext: string): string[] {
+  const results: string[] = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) results.push(...findFiles(fullPath, ext));
+      else if (entry.isFile() && entry.name.endsWith(ext)) results.push(fullPath);
+    }
+  } catch { /* permission error */ }
+  return results;
+}
+
 // ── LLM call ──────────────────────────────────────────────────────────
 
 async function generateDocPage(
@@ -155,30 +254,8 @@ async function generateDocPage(
   sourceContext: string,
   config: ModelManagerConfig,
 ): Promise<string> {
-  const systemPrompt = `You are a technical documentation writer for the AGENTS multi-agent orchestration platform.
-Generate a comprehensive documentation page for "${name}" (type: ${repoType}).
-
-Include these sections:
-- **Overview**: What it does, why it exists, one-paragraph summary
-- **Architecture**: Data flow, key components, how it fits in the AGENTS ecosystem
-- **Tools / API**: Table of tools or exported functions with descriptions and key parameters
-- **Configuration**: config.toml fields, environment variables, secrets vault
-- **Code Examples**: Relevant TypeScript/code snippets showing key patterns (use actual code from the source)
-- **Dependencies**: What it depends on (abilities, packages), what depends on it
-
-Rules:
-- Be specific — use actual function names, config fields, tool names from the source context
-- Include \`\`\`typescript code blocks for key patterns (copy from source, don't invent)
-- Keep under 400 lines total
-- Write for developers who need to understand and modify this code
-- Do NOT include generic installation boilerplate unless non-standard
-- Do NOT wrap output in a code block — output raw markdown
-- Start with "# ${name}" as the first line
-- Include a one-line description blockquote after the title: > ${description}
-- If the source shows tool registrations, document each tool in a table
-- For abilities: focus on what tools they expose and how to use them
-- For agents: focus on their role in the system and how they interact with other agents`;
-
+  const isCpp = repoType === 'cpp-engine' || repoType === 'cpp-game';
+  const systemPrompt = isCpp ? getCppDocPrompt(name, repoType, description) : getTsDocPrompt(name, repoType, description);
   const userPrompt = `Generate documentation for this package. Here is the source code context:\n\n${sourceContext}`;
 
   const response = await fetch(`${config.baseUrl}/v1/chat/completions`, {
@@ -205,6 +282,58 @@ Rules:
 
   const data = await response.json() as any;
   return data.choices?.[0]?.message?.content || '';
+}
+
+function getTsDocPrompt(name: string, repoType: string, description: string): string {
+  return `You are a technical documentation writer for the AGENTS multi-agent orchestration platform.
+Generate a comprehensive documentation page for "${name}" (type: ${repoType}).
+
+Include these sections:
+- **Overview**: What it does, why it exists, one-paragraph summary
+- **Architecture**: Data flow, key components, how it fits in the AGENTS ecosystem
+- **Tools / API**: Table of tools or exported functions with descriptions and key parameters
+- **Configuration**: config.toml fields, environment variables, secrets vault
+- **Code Examples**: Relevant TypeScript/code snippets showing key patterns (use actual code from the source)
+- **Dependencies**: What it depends on (abilities, packages), what depends on it
+
+Rules:
+- Be specific — use actual function names, config fields, tool names from the source context
+- Include \`\`\`typescript code blocks for key patterns (copy from source, don't invent)
+- Keep under 400 lines total
+- Write for developers who need to understand and modify this code
+- Do NOT include generic installation boilerplate unless non-standard
+- Do NOT wrap output in a code block — output raw markdown
+- Start with "# ${name}" as the first line
+- Include a one-line description blockquote after the title: > ${description}
+- If the source shows tool registrations, document each tool in a table
+- For abilities: focus on what tools they expose and how to use them
+- For agents: focus on their role in the system and how they interact with other agents`;
+}
+
+function getCppDocPrompt(name: string, repoType: string, description: string): string {
+  return `You are a technical documentation writer for the AGENTS multi-agent orchestration platform.
+Generate a comprehensive documentation page for "${name}" (type: ${repoType}).
+
+This is a C++20 project. Include these sections:
+- **Overview**: What it does, architecture philosophy, tech stack
+- **Module Architecture**: Key modules/subsystems, their responsibilities, data flow between them
+- **Key Classes**: Important classes with brief descriptions of their role
+- **V8 Scripting API**: JavaScript interface and how scripts interact with the engine (if applicable)
+- **Build & Configuration**: Build system (MSBuild/Visual Studio), dependencies, platform requirements
+- **Integration with AGENTS**: How it connects to the KĀDI broker/platform
+
+Rules:
+- Use actual class names, module names, file paths from the source context
+- Include \`\`\`cpp code snippets for key patterns (copy from source headers, don't invent)
+- Include \`\`\`javascript snippets for V8 scripting API (if applicable)
+- Keep under 400 lines total
+- Write for developers who need to understand and modify this code
+- Do NOT include generic boilerplate or npm/node commands
+- Do NOT wrap output in a code block — output raw markdown
+- Start with "# ${name}" as the first line
+- Include a one-line description blockquote after the title: > ${description}
+- If the source shows a module structure diagram (mermaid), include it
+- Focus on architecture and how components interact, not line-by-line code explanation`;
 }
 
 // ── Caching ───────────────────────────────────────────────────────────
@@ -277,7 +406,7 @@ export async function generateDocs(options?: {
       continue;
     }
 
-    const context = collectSourceContext(repoPath, repo.crawl);
+    const context = collectSourceContext(repoPath, repo.crawl, repo.type);
     const hash = getContextHash(context);
 
     if (!force && isCached(name, hash)) {

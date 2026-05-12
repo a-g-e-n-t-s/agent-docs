@@ -60,7 +60,11 @@ function getModelManagerConfig(): ModelManagerConfig | null {
 
 // ── Source Context ────────────────────────────────────────────────────
 
-function extractSourceContext(repoPath: string): string {
+function extractSourceContext(repoPath: string, repoType?: string): string {
+  if (repoType === 'cpp-engine' || repoType === 'cpp-game') {
+    return extractCppSourceContext(repoPath, repoType);
+  }
+
   const parts: string[] = [];
 
   const agentJsonPath = path.join(repoPath, 'agent.json');
@@ -118,6 +122,77 @@ function extractSourceContext(repoPath: string): string {
   return combined.length > MAX_SOURCE_CHARS ? combined.slice(0, MAX_SOURCE_CHARS) + '\n...(truncated)' : combined;
 }
 
+function extractCppSourceContext(repoPath: string, repoType: string): string {
+  const parts: string[] = [];
+
+  // CLAUDE.md — primary architecture source
+  const claudeMdPath = path.join(repoPath, 'CLAUDE.md');
+  if (fs.existsSync(claudeMdPath)) {
+    const content = fs.readFileSync(claudeMdPath, 'utf-8');
+    parts.push('=== CLAUDE.md (architecture) ===');
+    parts.push(content.slice(0, 8000));
+  }
+
+  // Docs/**/*.md
+  const docsDir = path.join(repoPath, 'Docs');
+  if (fs.existsSync(docsDir)) {
+    const mdFiles = findFilesReadme(docsDir, '.md').slice(0, 2);
+    for (const file of mdFiles) {
+      const content = fs.readFileSync(file, 'utf-8');
+      const relPath = path.relative(repoPath, file);
+      parts.push(`=== ${relPath} (first 2000 chars) ===`);
+      parts.push(content.slice(0, 2000));
+    }
+  }
+
+  // Key headers for Engine
+  if (repoType === 'cpp-engine') {
+    const codeDir = path.join(repoPath, 'Code', 'Engine');
+    if (fs.existsSync(codeDir)) {
+      const keyHeaders = ['Core/Engine.hpp', 'Script/IJSGameLogicContext.hpp', 'Renderer/Renderer.hpp'];
+      for (const header of keyHeaders) {
+        const headerPath = path.join(codeDir, header);
+        if (fs.existsSync(headerPath)) {
+          const content = fs.readFileSync(headerPath, 'utf-8');
+          parts.push(`=== Code/Engine/${header} (first 50 lines) ===`);
+          parts.push(content.split('\n').slice(0, 50).join('\n'));
+        }
+      }
+    }
+  }
+
+  // V8 scripts for DaemonAgent
+  if (repoType === 'cpp-game') {
+    const scriptsDir = path.join(repoPath, 'Run', 'Data', 'Scripts');
+    if (fs.existsSync(scriptsDir)) {
+      for (const script of ['main.js', 'JSEngine.js']) {
+        const scriptPath = path.join(scriptsDir, script);
+        if (fs.existsSync(scriptPath)) {
+          const content = fs.readFileSync(scriptPath, 'utf-8');
+          parts.push(`=== Run/Data/Scripts/${script} (first 60 lines) ===`);
+          parts.push(content.split('\n').slice(0, 60).join('\n'));
+        }
+      }
+    }
+  }
+
+  const combined = parts.join('\n\n');
+  return combined.length > MAX_SOURCE_CHARS ? combined.slice(0, MAX_SOURCE_CHARS) + '\n...(truncated)' : combined;
+}
+
+function findFilesReadme(dir: string, ext: string): string[] {
+  const results: string[] = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) results.push(...findFilesReadme(fullPath, ext));
+      else if (entry.isFile() && entry.name.endsWith(ext)) results.push(fullPath);
+    }
+  } catch { /* permission error */ }
+  return results;
+}
+
 // ── Caching ───────────────────────────────────────────────────────────
 
 function getContextHash(context: string): string {
@@ -147,6 +222,7 @@ async function updateReadmeWithLLM(
   config: ModelManagerConfig,
 ): Promise<string> {
   const isUpdate = existingReadme && existingReadme.length > 200;
+  const isCpp = repoType === 'cpp-engine' || repoType === 'cpp-game';
 
   const systemPrompt = isUpdate
     ? `You are updating an existing README.md for "${name}" (type: ${repoType}) in the AGENTS platform.
@@ -160,7 +236,27 @@ Rules:
 - If nothing needs changing, return the README unchanged
 - Do NOT wrap output in a code block — output raw markdown
 - Keep it under 300 lines
-- Be specific — use actual tool names, config fields, file paths from the source`
+- Be specific — use actual ${isCpp ? 'class names, module names, file paths' : 'tool names, config fields, file paths'} from the source`
+    : isCpp
+    ? `You are generating a README.md for "${name}" (type: ${repoType}) in the AGENTS platform.
+
+This is a C++20 project. Include sections:
+- Overview (architecture philosophy, tech stack)
+- Module Structure (table with | Module | Path | Responsibility | columns)
+- Build Instructions (Visual Studio/MSBuild requirements, Windows SDK)
+- V8 Scripting (if applicable — how JavaScript integrates with C++ engine)
+- Architecture Diagram (include mermaid diagram if the source provides one)
+- Dependencies (third-party libraries)
+
+Rules:
+- Use actual module names, class names, file paths from the source
+- Include build prerequisites (Visual Studio version, Windows SDK, etc.)
+- Do NOT include npm/node commands
+- Do NOT include badges or external images
+- Do NOT wrap output in a code block — output raw markdown
+- Start with "# ${name}" as the first line
+- Include a one-line description blockquote after the title
+- Keep it under 300 lines`
     : `You are generating a README.md for "${name}" (type: ${repoType}) in the AGENTS platform.
 
 Rules:
@@ -233,7 +329,7 @@ async function main() {
       continue;
     }
 
-    const context = extractSourceContext(repoPath);
+    const context = extractSourceContext(repoPath, repo.type);
     const hash = getContextHash(context);
 
     if (!force && isCached(name, hash)) {
