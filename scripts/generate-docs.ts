@@ -365,7 +365,8 @@ Rules:
 // ── Caching ───────────────────────────────────────────────────────────
 
 function getContextHash(context: string): string {
-  return crypto.createHash('sha256').update(context).digest('hex').slice(0, 16);
+  // v2: includes H1-stripping fix — invalidates old cache
+  return crypto.createHash('sha256').update('v2:' + context).digest('hex').slice(0, 16);
 }
 
 function isCached(repoName: string, hash: string): boolean {
@@ -436,7 +437,12 @@ export async function generateDocs(options?: {
     const hash = getContextHash(context);
 
     if (!force && isCached(name, hash)) {
-      continue;
+      // Verify output file still exists (sync step may have overwritten it)
+      const subdir = getOutputSubdir(name, repo.type);
+      const outputFile = path.join(DOCS_DIR, subdir, 'index.md');
+      if (fs.existsSync(outputFile)) {
+        continue;
+      }
     }
 
     workItems.push({ name, repo, repoPath, context, hash });
