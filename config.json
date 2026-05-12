@@ -194,13 +194,13 @@
       "path": "../../Engine",
       "description": "Daemon Engine — C++20 game engine with DirectX 11, V8 scripting",
       "type": "cpp-engine",
-      "crawl": ["README.md", "CLAUDE.md", "Docs/**/*.md", "Code/**/*.hpp", "Code/**/*.cpp"]
+      "crawl": ["Docs/**/*.md", "Code/**/*.hpp"]
     },
     "daemon-agent": {
       "path": "../../DaemonAgent",
       "description": "DaemonAgent — dual-language game project (C++20 + TypeScript)",
       "type": "cpp-game",
-      "crawl": ["CLAUDE.md", "Docs/**/*.md", "openspec/**/*.md", "Run/Data/Scripts/**/*.js"]
+      "crawl": ["Docs/**/*.md", "openspec/**/*.md", "Run/Data/Scripts/**/*.js"]
     }
   },
   "output": {

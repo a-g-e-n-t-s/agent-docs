@@ -125,15 +125,55 @@ function extractSourceContext(repoPath: string, repoType?: string): string {
 function extractCppSourceContext(repoPath: string, repoType: string): string {
   const parts: string[] = [];
 
-  // CLAUDE.md — primary architecture source
-  const claudeMdPath = path.join(repoPath, 'CLAUDE.md');
-  if (fs.existsSync(claudeMdPath)) {
-    const content = fs.readFileSync(claudeMdPath, 'utf-8');
-    parts.push('=== CLAUDE.md (architecture) ===');
-    parts.push(content.slice(0, 8000));
+  // Read actual source code, not CLAUDE.md
+  if (repoType === 'cpp-engine') {
+    const codeDir = path.join(repoPath, 'Code', 'Engine');
+    if (fs.existsSync(codeDir)) {
+      const modules = fs.readdirSync(codeDir, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name)
+        .slice(0, 12);
+      parts.push(`=== Engine Modules ===`);
+      parts.push(modules.join(', '));
+
+      for (const mod of modules) {
+        const modDir = path.join(codeDir, mod);
+        const headers = fs.readdirSync(modDir).filter(f => f.endsWith('.hpp')).slice(0, 1);
+        for (const header of headers) {
+          const content = fs.readFileSync(path.join(modDir, header), 'utf-8');
+          parts.push(`=== Code/Engine/${mod}/${header} (first 50 lines) ===`);
+          parts.push(content.split('\n').slice(0, 50).join('\n'));
+        }
+      }
+    }
   }
 
-  // Docs/**/*.md
+  if (repoType === 'cpp-game') {
+    const codeDir = path.join(repoPath, 'Code');
+    if (fs.existsSync(codeDir)) {
+      const hppFiles = findFilesReadme(codeDir, '.hpp').slice(0, 5);
+      for (const file of hppFiles) {
+        const content = fs.readFileSync(file, 'utf-8');
+        const relPath = path.relative(repoPath, file);
+        parts.push(`=== ${relPath} (first 50 lines) ===`);
+        parts.push(content.split('\n').slice(0, 50).join('\n'));
+      }
+    }
+
+    const scriptsDir = path.join(repoPath, 'Run', 'Data', 'Scripts');
+    if (fs.existsSync(scriptsDir)) {
+      for (const script of ['main.js', 'JSEngine.js', 'JSGame.js']) {
+        const scriptPath = path.join(scriptsDir, script);
+        if (fs.existsSync(scriptPath)) {
+          const content = fs.readFileSync(scriptPath, 'utf-8');
+          parts.push(`=== Run/Data/Scripts/${script} (first 60 lines) ===`);
+          parts.push(content.split('\n').slice(0, 60).join('\n'));
+        }
+      }
+    }
+  }
+
+  // Docs/**/*.md (for both types)
   const docsDir = path.join(repoPath, 'Docs');
   if (fs.existsSync(docsDir)) {
     const mdFiles = findFilesReadme(docsDir, '.md').slice(0, 2);
@@ -142,37 +182,6 @@ function extractCppSourceContext(repoPath: string, repoType: string): string {
       const relPath = path.relative(repoPath, file);
       parts.push(`=== ${relPath} (first 2000 chars) ===`);
       parts.push(content.slice(0, 2000));
-    }
-  }
-
-  // Key headers for Engine
-  if (repoType === 'cpp-engine') {
-    const codeDir = path.join(repoPath, 'Code', 'Engine');
-    if (fs.existsSync(codeDir)) {
-      const keyHeaders = ['Core/Engine.hpp', 'Script/IJSGameLogicContext.hpp', 'Renderer/Renderer.hpp'];
-      for (const header of keyHeaders) {
-        const headerPath = path.join(codeDir, header);
-        if (fs.existsSync(headerPath)) {
-          const content = fs.readFileSync(headerPath, 'utf-8');
-          parts.push(`=== Code/Engine/${header} (first 50 lines) ===`);
-          parts.push(content.split('\n').slice(0, 50).join('\n'));
-        }
-      }
-    }
-  }
-
-  // V8 scripts for DaemonAgent
-  if (repoType === 'cpp-game') {
-    const scriptsDir = path.join(repoPath, 'Run', 'Data', 'Scripts');
-    if (fs.existsSync(scriptsDir)) {
-      for (const script of ['main.js', 'JSEngine.js']) {
-        const scriptPath = path.join(scriptsDir, script);
-        if (fs.existsSync(scriptPath)) {
-          const content = fs.readFileSync(scriptPath, 'utf-8');
-          parts.push(`=== Run/Data/Scripts/${script} (first 60 lines) ===`);
-          parts.push(content.split('\n').slice(0, 60).join('\n'));
-        }
-      }
     }
   }
 

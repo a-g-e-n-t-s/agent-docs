@@ -152,66 +152,68 @@ function collectSourceContext(repoPath: string, crawlPatterns: string[], repoTyp
 function collectCppSourceContext(repoPath: string, repoType: string): string {
   const parts: string[] = [];
 
-  // CLAUDE.md — primary architecture source (10-14KB)
-  const claudeMdPath = path.join(repoPath, 'CLAUDE.md');
-  if (fs.existsSync(claudeMdPath)) {
-    const content = fs.readFileSync(claudeMdPath, 'utf-8');
-    parts.push('=== CLAUDE.md (architecture) ===');
-    parts.push(content.slice(0, 12000));
-  }
-
-  // Docs/**/*.md — technical documentation
-  const docsDir = path.join(repoPath, 'Docs');
-  if (fs.existsSync(docsDir)) {
-    const mdFiles = findFiles(docsDir, '.md').slice(0, 3);
-    for (const file of mdFiles) {
-      const content = fs.readFileSync(file, 'utf-8');
-      const relPath = path.relative(repoPath, file);
-      parts.push(`=== ${relPath} (first 3000 chars) ===`);
-      parts.push(content.slice(0, 3000));
-    }
-  }
-
-  // Key .hpp headers — module architecture
+  // Key .hpp headers — module architecture (read actual code, not CLAUDE.md)
   if (repoType === 'cpp-engine') {
     const codeDir = path.join(repoPath, 'Code', 'Engine');
     if (fs.existsSync(codeDir)) {
-      const keyHeaders = [
-        'Core/Engine.hpp',
-        'Core/EventSystem.hpp',
-        'Core/StateBuffer.hpp',
-        'Script/IJSGameLogicContext.hpp',
-        'Script/IScriptableObject.hpp',
-        'Renderer/Renderer.hpp',
-        'Entity/EntityState.hpp',
-        'Audio/AudioSystem.hpp',
-      ];
-      for (const header of keyHeaders) {
-        const headerPath = path.join(codeDir, header);
-        if (fs.existsSync(headerPath)) {
-          const content = fs.readFileSync(headerPath, 'utf-8');
-          const lines = content.split('\n').slice(0, 60).join('\n');
-          parts.push(`=== Code/Engine/${header} (first 60 lines) ===`);
+      // Discover module directories
+      const modules = fs.readdirSync(codeDir, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name)
+        .slice(0, 12);
+      parts.push(`=== Engine Modules ===`);
+      parts.push(modules.join(', '));
+
+      // Read key headers from each module (first .hpp file, first 80 lines)
+      for (const mod of modules) {
+        const modDir = path.join(codeDir, mod);
+        const headers = fs.readdirSync(modDir).filter(f => f.endsWith('.hpp')).slice(0, 2);
+        for (const header of headers) {
+          const content = fs.readFileSync(path.join(modDir, header), 'utf-8');
+          const lines = content.split('\n').slice(0, 80).join('\n');
+          parts.push(`=== Code/Engine/${mod}/${header} (first 80 lines) ===`);
           parts.push(lines);
         }
       }
     }
+
+    // Also read the main engine header if it exists
+    const engineHpp = path.join(repoPath, 'Code', 'Engine', 'Core', 'Engine.hpp');
+    if (fs.existsSync(engineHpp)) {
+      const content = fs.readFileSync(engineHpp, 'utf-8');
+      if (!parts.some(p => p.includes('Core/Engine.hpp'))) {
+        parts.push(`=== Code/Engine/Core/Engine.hpp (full) ===`);
+        parts.push(content.slice(0, 3000));
+      }
+    }
   }
 
-  // V8 scripts — DaemonAgent game logic
+  // DaemonAgent: read C++ game code + V8 scripts
   if (repoType === 'cpp-game') {
+    // C++ game code
+    const codeDir = path.join(repoPath, 'Code');
+    if (fs.existsSync(codeDir)) {
+      const hppFiles = findFiles(codeDir, '.hpp').slice(0, 8);
+      for (const file of hppFiles) {
+        const content = fs.readFileSync(file, 'utf-8');
+        const relPath = path.relative(repoPath, file);
+        const lines = content.split('\n').slice(0, 60).join('\n');
+        parts.push(`=== ${relPath} (first 60 lines) ===`);
+        parts.push(lines);
+      }
+    }
+
+    // V8 scripts — the actual game logic
     const scriptsDir = path.join(repoPath, 'Run', 'Data', 'Scripts');
     if (fs.existsSync(scriptsDir)) {
-      const keyScripts = ['main.js', 'JSEngine.js', 'JSGame.js'];
-      for (const script of keyScripts) {
-        const scriptPath = path.join(scriptsDir, script);
-        if (fs.existsSync(scriptPath)) {
-          const content = fs.readFileSync(scriptPath, 'utf-8');
-          const lines = content.split('\n').slice(0, 80).join('\n');
-          parts.push(`=== Run/Data/Scripts/${script} (first 80 lines) ===`);
-          parts.push(lines);
-        }
+      const jsFiles = fs.readdirSync(scriptsDir).filter(f => f.endsWith('.js')).slice(0, 6);
+      for (const script of jsFiles) {
+        const content = fs.readFileSync(path.join(scriptsDir, script), 'utf-8');
+        const lines = content.split('\n').slice(0, 80).join('\n');
+        parts.push(`=== Run/Data/Scripts/${script} (first 80 lines) ===`);
+        parts.push(lines);
       }
+
       // KĀDI integration scripts
       const kadiDir = path.join(scriptsDir, 'kadi');
       if (fs.existsSync(kadiDir)) {
@@ -223,6 +225,30 @@ function collectCppSourceContext(repoPath: string, repoType: string): string {
           parts.push(lines);
         }
       }
+    }
+
+    // openspec docs if they exist
+    const openspecDir = path.join(repoPath, 'openspec');
+    if (fs.existsSync(openspecDir)) {
+      const specFiles = findFiles(openspecDir, '.md').slice(0, 2);
+      for (const file of specFiles) {
+        const content = fs.readFileSync(file, 'utf-8');
+        const relPath = path.relative(repoPath, file);
+        parts.push(`=== ${relPath} (first 2000 chars) ===`);
+        parts.push(content.slice(0, 2000));
+      }
+    }
+  }
+
+  // Docs/**/*.md — technical documentation (for both types)
+  const docsDir = path.join(repoPath, 'Docs');
+  if (fs.existsSync(docsDir)) {
+    const mdFiles = findFiles(docsDir, '.md').slice(0, 2);
+    for (const file of mdFiles) {
+      const content = fs.readFileSync(file, 'utf-8');
+      const relPath = path.relative(repoPath, file);
+      parts.push(`=== ${relPath} (first 2000 chars) ===`);
+      parts.push(content.slice(0, 2000));
     }
   }
 
@@ -481,7 +507,9 @@ export async function generateDocs(options?: {
 
 function ensureFrontmatter(markdown: string, name: string, description: string): string {
   if (markdown.startsWith('---')) return markdown;
-  return `---\ntitle: "${name}"\ndescription: "${description}"\n---\n\n${markdown}`;
+  // Strip leading H1 — Starlight renders the frontmatter title as the page heading
+  const stripped = markdown.replace(/^#\s+.+\n+/, '');
+  return `---\ntitle: "${name}"\ndescription: "${description}"\n---\n\n${stripped}`;
 }
 
 function parseRepoFilter(): string[] | null {
