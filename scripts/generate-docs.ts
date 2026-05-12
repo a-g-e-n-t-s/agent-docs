@@ -314,15 +314,16 @@ function getTsDocPrompt(name: string, repoType: string, description: string): st
   return `You are a technical documentation writer for the AGENTS multi-agent orchestration platform.
 Generate a comprehensive documentation page for "${name}" (type: ${repoType}).
 
-Include these sections:
-- **Overview**: What it does, why it exists, one-paragraph summary
-- **Architecture**: Data flow, key components, how it fits in the AGENTS ecosystem
-- **Tools / API**: Table of tools or exported functions with descriptions and key parameters
-- **Configuration**: config.toml fields, environment variables, secrets vault
-- **Code Examples**: Relevant TypeScript/code snippets showing key patterns (use actual code from the source)
-- **Dependencies**: What it depends on (abilities, packages), what depends on it
+Include these sections (use ## markdown headings for each):
+- ## Overview: What it does, why it exists, one-paragraph summary
+- ## Architecture: Data flow, key components, how it fits in the AGENTS ecosystem
+- ## Tools / API: Table of tools or exported functions with descriptions and key parameters
+- ## Configuration: config.toml fields, environment variables, secrets vault
+- ## Code Examples: Relevant TypeScript/code snippets showing key patterns (use actual code from the source)
+- ## Dependencies: What it depends on (abilities, packages), what depends on it
 
 Rules:
+- IMPORTANT: Use ## for section headings (not bold text, not plain text)
 - Be specific — use actual function names, config fields, tool names from the source context
 - Include \`\`\`typescript code blocks for key patterns (copy from source, don't invent)
 - Keep under 400 lines total
@@ -340,15 +341,16 @@ function getCppDocPrompt(name: string, repoType: string, description: string): s
   return `You are a technical documentation writer for the AGENTS multi-agent orchestration platform.
 Generate a comprehensive documentation page for "${name}" (type: ${repoType}).
 
-This is a C++20 project. Include these sections:
-- **Overview**: What it does, architecture philosophy, tech stack
-- **Module Architecture**: Key modules/subsystems, their responsibilities, data flow between them
-- **Key Classes**: Important classes with brief descriptions of their role
-- **V8 Scripting API**: JavaScript interface and how scripts interact with the engine (if applicable)
-- **Build & Configuration**: Build system (MSBuild/Visual Studio), dependencies, platform requirements
-- **Integration with AGENTS**: How it connects to the KĀDI broker/platform
+This is a C++20 project. Include these sections (use ## markdown headings for each):
+- ## Overview: What it does, architecture philosophy, tech stack
+- ## Module Architecture: Key modules/subsystems, their responsibilities, data flow between them
+- ## Key Classes: Important classes with brief descriptions of their role
+- ## V8 Scripting API: JavaScript interface and how scripts interact with the engine (if applicable)
+- ## Build & Configuration: Build system (MSBuild/Visual Studio), dependencies, platform requirements
+- ## Integration with AGENTS: How it connects to the KĀDI broker/platform
 
 Rules:
+- IMPORTANT: Use ## for section headings (not bold text, not plain text)
 - Use actual class names, module names, file paths from the source context
 - Include \`\`\`cpp code snippets for key patterns (copy from source headers, don't invent)
 - Include \`\`\`javascript snippets for V8 scripting API (if applicable)
@@ -365,8 +367,8 @@ Rules:
 // ── Caching ───────────────────────────────────────────────────────────
 
 function getContextHash(context: string): string {
-  // v2: includes H1-stripping fix — invalidates old cache
-  return crypto.createHash('sha256').update('v2:' + context).digest('hex').slice(0, 16);
+  // v3: enforces ## headings in LLM output
+  return crypto.createHash('sha256').update('v3:' + context).digest('hex').slice(0, 16);
 }
 
 function isCached(repoName: string, hash: string): boolean {
@@ -514,8 +516,35 @@ export async function generateDocs(options?: {
 function ensureFrontmatter(markdown: string, name: string, description: string): string {
   if (markdown.startsWith('---')) return markdown;
   // Strip leading H1 — Starlight renders the frontmatter title as the page heading
-  const stripped = markdown.replace(/^#\s+.+\n+/, '');
+  let stripped = markdown.replace(/^#\s+.+\n+/, '');
+  // Ensure section headers use ## markdown format (LLM sometimes outputs plain text headers)
+  stripped = normalizeHeadings(stripped);
   return `---\ntitle: "${name}"\ndescription: "${description}"\n---\n\n${stripped}`;
+}
+
+function normalizeHeadings(content: string): string {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  const sectionPattern = /^(Overview|Architecture|Tools\s*\/?\s*API|Configuration|Code Examples|Dependencies|Key Classes|Module Architecture|V8 Scripting|Build|Integration|Quick Start|Development)\s*$/i;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // If line matches a known section header and isn't already a markdown heading
+    if (sectionPattern.test(line.trim()) && !line.startsWith('#')) {
+      result.push(`## ${line.trim()}`);
+    } else if (line.startsWith('**') && line.endsWith('**') && !line.includes(':') && line.length < 60) {
+      // Bold-only lines that look like headers: **Architecture** → ## Architecture
+      const heading = line.replace(/^\*\*/, '').replace(/\*\*$/, '');
+      if (sectionPattern.test(heading)) {
+        result.push(`## ${heading}`);
+      } else {
+        result.push(line);
+      }
+    } else {
+      result.push(line);
+    }
+  }
+  return result.join('\n');
 }
 
 function parseRepoFilter(): string[] | null {
