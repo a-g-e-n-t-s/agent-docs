@@ -367,8 +367,8 @@ Rules:
 // ── Caching ───────────────────────────────────────────────────────────
 
 function getContextHash(context: string): string {
-  // v3: enforces ## headings in LLM output
-  return crypto.createHash('sha256').update('v3:' + context).digest('hex').slice(0, 16);
+  // v4: strips duplicate Overview heading
+  return crypto.createHash('sha256').update('v4:' + context).digest('hex').slice(0, 16);
 }
 
 function isCached(repoName: string, hash: string): boolean {
@@ -517,7 +517,10 @@ function ensureFrontmatter(markdown: string, name: string, description: string):
   if (markdown.startsWith('---')) return markdown;
   // Strip leading H1 — Starlight renders the frontmatter title as the page heading
   let stripped = markdown.replace(/^#\s+.+\n+/, '');
-  // Ensure section headers use ## markdown format (LLM sometimes outputs plain text headers)
+  // Strip ## Overview heading — Starlight already shows the title as first TOC entry
+  // Keep the overview content but remove the heading to avoid duplicate "Overview" in TOC
+  stripped = stripped.replace(/^##\s+Overview\s*\n/m, '');
+  // Ensure section headers use ## markdown format
   stripped = normalizeHeadings(stripped);
   return `---\ntitle: "${name}"\ndescription: "${description}"\n---\n\n${stripped}`;
 }
