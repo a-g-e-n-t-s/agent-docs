@@ -1,0 +1,12 @@
+name: Bump parent AGENTS repo
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  bump:
+    uses: a-g-e-n-t-s/AGENTS/.github/workflows/bump-submodule.yml@main
+    with:
+      submodule-path: agents/agent-docs
+    secrets: inherit
