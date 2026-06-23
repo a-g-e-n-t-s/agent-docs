@@ -9,7 +9,7 @@
   "crawlIgnore": ["node_modules/**", "dist/**", "*.lock", "*.map", "*.d.ts", "abilities/**", ".git/**"],
   "repos": {
     "agents-core": {
-      "path": "..",
+      "path": "../..",
       "description": "AGENTS monorepo root — architecture, concepts, deployment guides",
       "type": "kadi-monorepo",
       "crawl": ["Docs/**/*.md", "README.md", "KADI-ARCHITECTURE-CONCEPTS.md"]
@@ -59,91 +59,91 @@
       "crawl": ["README.md", "agent.json", "server/src/**/*.ts", "client/src/**/*.{ts,tsx}"]
     },
     "mcp-server-quest": {
-      "path": "../mcp-server-quest",
+      "path": "../../mcp-servers/mcp-server-quest",
       "description": "Quest protocol MCP server",
       "type": "kadi-package",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "mcp-server-git": {
-      "path": "../mcp-server-git",
+      "path": "../../mcp-servers/mcp-server-git",
       "description": "Git operations MCP server",
       "type": "kadi-package",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-memory": {
-      "path": "../ability-memory",
+      "path": "../../abilities/ability-memory",
       "description": "Memory domain layer — fact reconciliation, entity dedup, soft-delete",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts", "config.toml"]
     },
     "ability-graph": {
-      "path": "../ability-graph",
+      "path": "../../abilities/ability-graph",
       "description": "Graph engine — N-signal hybrid search, chunking, entity dedup, ArcadeDB",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts", "config.toml"]
     },
     "ability-search": {
-      "path": "../ability-search",
+      "path": "../../abilities/ability-search",
       "description": "Search engine — chunking, embedding, hybrid text search (deprecated, use ability-graph)",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-arcadedb": {
-      "path": "../ability-arcadedb",
+      "path": "../../abilities/ability-arcadedb",
       "description": "ArcadeDB wrapper — database admin, backup/restore",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-eval": {
-      "path": "../ability-eval",
+      "path": "../../abilities/ability-eval",
       "description": "Code evaluation ability",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-vision": {
-      "path": "../ability-vision",
+      "path": "../../abilities/ability-vision",
       "description": "Vision/screenshot ability",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-file-local": {
-      "path": "../ability-file-local",
+      "path": "../../abilities/ability-file-local",
       "description": "Local filesystem operations",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-file-remote": {
-      "path": "../ability-file-remote",
+      "path": "../../abilities/ability-file-remote",
       "description": "Remote filesystem operations",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-file-cloud": {
-      "path": "../ability-file-cloud",
+      "path": "../../abilities/ability-file-cloud",
       "description": "Cloud storage operations",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-docs-memory": {
-      "path": "../ability-docs-memory",
+      "path": "../../abilities/ability-docs-memory",
       "description": "Documentation search engine — 4-signal hybrid recall",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts", "config.toml"]
     },
     "ability-backup": {
-      "path": "../ability-backup",
+      "path": "../../abilities/ability-backup",
       "description": "Backup and restore ability",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-tunnel": {
-      "path": "../ability-tunnel",
+      "path": "../../abilities/ability-tunnel",
       "description": "Network tunnel ability",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "ability-voice": {
-      "path": "../ability-voice",
+      "path": "../../abilities/ability-voice",
       "description": "Voice/audio ability",
       "type": "kadi-ability",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
@@ -173,19 +173,19 @@
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "mcp-server-github": {
-      "path": "../mcp-server-github",
+      "path": "../../mcp-servers/mcp-server-github",
       "description": "GitHub operations MCP server",
       "type": "kadi-package",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
     },
     "template-agent-python": {
-      "path": "../template-agent-python",
+      "path": "../../templates/template-agent-python",
       "description": "Python agent template",
       "type": "kadi-package",
       "crawl": ["README.md", "agent.json"]
     },
     "template-agent-typescript": {
-      "path": "../template-agent-typescript",
+      "path": "../../templates/template-agent-typescript",
       "description": "TypeScript agent template",
       "type": "kadi-package",
       "crawl": ["README.md", "agent.json", "src/**/*.ts"]
